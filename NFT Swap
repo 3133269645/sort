@@ -1,0 +1,110 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+
+contract NFTSwap {
+    struct Order {
+        uint256 tokenId;
+        address payable seller;
+        uint256 price;
+        bool sold;
+    }
+
+    mapping(uint256 => Order) public orders;
+    mapping(address => uint256[]) public tokens;
+
+    event Listed(uint256 indexed tokenId, address indexed seller, uint256 price);
+    event Revoked(uint256 indexed tokenId, address indexed seller);
+    event Updated(uint256 indexed tokenId, uint256 newPrice);
+    event Purchased(uint256 indexed tokenId, address indexed buyer, uint256 price);
+
+    // 挂单
+    function list(uint256 tokenId, uint256 price) public {
+        require(IERC721(msg.sender).ownerOf(tokenId) == msg.sender, "Not the NFT owner");
+        require(orders[tokenId].seller == address(0), "Order already exists");
+
+        orders[tokenId] = Order(tokenId, payable(msg.sender), price, false);
+        tokens[msg.sender].push(tokenId);
+
+        emit Listed(tokenId, msg.sender, price);
+    }
+
+    // 撤单
+    function revoke(uint256 tokenId) public {
+        require(orders[tokenId].seller == msg.sender, "Not the order seller");
+        require(!orders[tokenId].sold, "Order already sold");
+
+        delete orders[tokenId];
+        for (uint i = 0; i < tokens[msg.sender].length; i++) {
+            if (tokens[msg.sender][i] == tokenId) {
+                tokens[msg.sender][i] = tokens[msg.sender][tokens[msg.sender].length - 1];
+                tokens[msg.sender].pop();
+                break;
+            }
+        }
+
+        emit Revoked(tokenId, msg.sender);
+    }
+
+    // 修改价格
+    function update(uint256 tokenId, uint256 newPrice) public {
+        require(orders[tokenId].seller == msg.sender, "Not the order seller");
+        require(!orders[tokenId].sold, "Order already sold");
+
+        orders[tokenId].price = newPrice;
+
+        emit Updated(tokenId, newPrice);
+    }
+
+    // 购买
+    function purchase(uint256 tokenId) public payable {
+        Order storage order = orders[tokenId];
+        require(!order.sold, "Order already sold");
+        require(msg.value >= order.price, "Not enough ether sent");
+
+        order.sold = true;
+        IERC721(nftAddress(tokenId)).transferFrom(address(this), msg.sender, tokenId);
+
+        payable(order.seller).transfer(msg.value);
+
+        emit Purchased(tokenId, msg.sender, msg.value);
+    }
+
+    // 获取 NFT 地址
+    function nftAddress(uint256 tokenId) internal view returns (address) {
+        // 这里需要一个方法来根据 tokenId 获取 NFT 合约地址
+        // 这可能需要一个额外的映射或者使用 IERC721 接口的其他特性
+        // 这里只是一个示例，实际情况可能更复杂
+    }
+
+    // 用于提取遗留的 NFT
+    function withdrawNFT(uint256 tokenId) public {
+        require(tokens[msg.sender].length > 0, "No tokens to withdraw");
+        require(IERC721(msg.sender).ownerOf(tokenId) == address(this), "Contract is not the NFT owner");
+
+        IERC721(msg.sender).transferFrom(address(this), msg.sender, tokenId);
+    }
+
+    // 用于提取遗留的 ETH
+    function withdraw() public {
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No ETH to withdraw");
+        payable(msg.sender).transfer(balance);
+    }
+
+    // 接收 NFT
+    function onERC721Received(
+        address,
+        address from,
+        uint256 tokenId,
+        bytes calldata
+    ) public virtual override returns (bytes4) {
+        require(msg.sender == nftAddress(tokenId), "Not the NFT contract");
+        return IERC721Receiver.onERC721Received.selector;
+    }
+}
+
+interface IERC721Receiver {
+    function onERC721Received(address, address, uint256, bytes calldata) external returns (bytes4);
+}
