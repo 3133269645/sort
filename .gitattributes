@@ -1,2 +1,26 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+contract InsertionSorter {
+    // 插入排序函数
+    function insertionSort(uint[] memory arr) public pure returns (uint[] memory) {
+        uint n = arr.length;
+        for (uint i = 1; i < n; i++) {
+            uint key = arr[i];
+            uint j = i - 1;
+            // 将 arr[i] 插入到已排序序列 arr[0...i-1] 中的正确位置
+            while (j >= 0 && arr[j] > key) {
+                arr[j + 1] = arr[j];
+                j = j - 1;
+            }
+            arr[j + 1] = key;
+        }
+        return arr;
+    }
+
+    // 接收 Ether 的函数
+    receive() external payable {
+        // 这里可以添加代码来处理接收到的 Ether
+        // 例如，可以将接收到的 Ether 存储在合约中
+    }
+}
